@@ -16,6 +16,10 @@ PLAYER_SPEED: f32 : 300
 PLAYER_FRICTION: f32 : 0.9
 
 GAMEOVER_TEXT :: "GAME OVER!!!"
+GAMEOVER_TEXT_FONT_SIZE :: 25
+GAMEOVER_SUBTEXT_FONT_SIZE :: 15
+GAMEOVER_TEXT_FLICKER_SPEED :: 0.6
+GAMEOVER_SCREEN_OFF_DELAY :: 3
 
 CAR_SPEED :: 160
 CAR_SPAWN_RATE :: 1.5
@@ -71,6 +75,7 @@ frameIndex: u64 = 0
 imageFilenames :: [?]string{"logo.png", "grasstile.png"}
 
 score: u32 = 0
+bestScore: u32 = 0
 
 isGameOver: bool = false
 
@@ -139,6 +144,10 @@ main :: proc() {
 
 	rl.SetTargetFPS(60)
 
+	when DEV {
+		rl.SetExitKey(rl.KeyboardKey.END)
+	}
+
 	init()
 
 	for !rl.WindowShouldClose() {
@@ -171,6 +180,9 @@ main :: proc() {
 					score -= 1
 				}
 				movePlayer(0, 0.5)
+			}
+			if score > bestScore {
+				bestScore = score
 			}
 
 			player.position.x += player.velocity.x * deltaTime
@@ -225,18 +237,13 @@ main :: proc() {
 			break
 
 		case .GameOver:
-			renderGameOver()
+			renderGameOver(deltaTime)
 			break
 
 		}
 
 		rl.EndDrawing()
 
-		when DEV {
-			if rl.IsKeyDown(.END) {
-				rl.CloseWindow()
-			}
-		}
 	}
 
 	rl.CloseWindow()
@@ -253,15 +260,44 @@ movePlayer :: proc(x: f32, y: f32) {
 	}
 }
 
+isGameOverTextVisible := true
+gameOverTextFlickerDelay: f32 = 0
+gameOverOffDelay: f32 = 0
 renderGameOver :: proc(deltaTime: f32 = 0) {
-	textWidth := rl.MeasureText(GAMEOVER_TEXT, 20)
-	rl.DrawText(
-		GAMEOVER_TEXT,
-		WINDOW_WIDTH / 2 - textWidth / 2,
-		WINDOW_HEIGHT / 2,
-		20,
-		rl.RAYWHITE,
-	)
+	gameOverTextFlickerDelay += deltaTime
+	gameOverOffDelay += deltaTime
+	if gameOverTextFlickerDelay > GAMEOVER_TEXT_FLICKER_SPEED {
+		gameOverTextFlickerDelay = 0
+		isGameOverTextVisible = !isGameOverTextVisible
+	}
+	if isGameOverTextVisible {
+		textWidth := rl.MeasureText(GAMEOVER_TEXT, GAMEOVER_TEXT_FONT_SIZE)
+		rl.DrawText(
+			GAMEOVER_TEXT,
+			WINDOW_WIDTH / 2 - textWidth / 2,
+			WINDOW_HEIGHT / 2,
+			GAMEOVER_TEXT_FONT_SIZE,
+			rl.RAYWHITE,
+		)
+		scoreText := strings.clone_to_cstring(fmt.aprintf("Score: %d, Best: %d", score, bestScore))
+		textWidth = rl.MeasureText(scoreText, GAMEOVER_SUBTEXT_FONT_SIZE)
+		rl.DrawText(
+			scoreText,
+			WINDOW_WIDTH / 2 - textWidth / 2,
+			WINDOW_HEIGHT / 2 + GAMEOVER_SUBTEXT_FONT_SIZE / 2 + GAMEOVER_TEXT_FONT_SIZE,
+			GAMEOVER_SUBTEXT_FONT_SIZE,
+			rl.RAYWHITE,
+		)
+	}
+
+	if gameOverOffDelay > GAMEOVER_SCREEN_OFF_DELAY ||
+	   rl.IsKeyDown(rl.KeyboardKey.SPACE) ||
+	   rl.IsKeyDown(rl.KeyboardKey.ESCAPE) {
+		gameOverOffDelay = 0
+		isGameOver = false
+		currentScreenState = .Menu
+		init()
+	}
 }
 
 menuTextBobOffset: f32 = 0
