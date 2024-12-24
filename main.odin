@@ -348,6 +348,15 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				if car.position.x > WINDOW_WIDTH {
 					car.position.x = -CAR_WIDTH
 				}
+
+				if !isGameOver {
+					if player.position.x - player.radius < car.position.x + car.width &&
+					   player.position.x + player.radius > car.position.x &&
+					   player.position.y - player.radius < car.position.y + car.height &&
+					   player.position.y + player.radius > car.position.y {
+						gameOver()
+					}
+				}
 			}
 
 			road.carSpawnDelay += deltaTime
