@@ -73,6 +73,7 @@ camera := rl.Camera2D{}
 frameIndex: u64 = 0
 
 imageFilenames :: [?]string{"logo.png", "grasstile.png"}
+imageContents :: [?][]u8{#load("assets/logo.png"), #load("assets/grasstile.png")}
 
 score: u32 = 0
 bestScore: u32 = 0
@@ -105,11 +106,30 @@ RoadEntity :: struct {
 ROAD_WIDTH :: 260
 roads: [dynamic]RoadEntity
 
+//config vs init: init runs when the game has to be reset, so every time the user starts a new game, however config only runs once - on launch
+
+config :: proc() {
+	camera = rl.Camera2D{}
+	camera.zoom = 1
+
+	keys = Keyboard{false, false, false, false}
+
+	images = make([dynamic]rl.Texture2D, 0, 0)
+
+	//for fileName in imageFilenames {
+	//	filePath := strings.concatenate({"assets/", fileName})
+	//	append(&images, utils.loadTexture(filePath))
+	//}
+	for fileContent in imageContents {
+		contentPtr := &fileContent[0]
+		append(&images, utils.loadTextureFromMem(contentPtr, i32(len(fileContent))))
+	}
+}
+
 init :: proc() {
 	isGameOver = false
 
-	camera = rl.Camera2D{}
-	camera.zoom = 1
+	score = 0
 
 	player = Player {
 		rl.Vector2{WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2},
@@ -119,14 +139,6 @@ init :: proc() {
 		rl.BLACK,
 	}
 
-	keys = Keyboard{false, false, false, false}
-
-	images = make([dynamic]rl.Texture2D, 0, 0)
-
-	for fileName in imageFilenames {
-		filePath := strings.concatenate({"assets/", fileName})
-		append(&images, utils.loadTexture(filePath))
-	}
 
 	tiles = make([dynamic]TileEntity, 0, 0)
 	for w in 0 ..< tileAmountWidth {
@@ -148,6 +160,7 @@ main :: proc() {
 		rl.SetExitKey(rl.KeyboardKey.END)
 	}
 
+	config()
 	init()
 
 	for !rl.WindowShouldClose() {
