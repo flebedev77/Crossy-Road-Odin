@@ -24,6 +24,8 @@ CAR_HEIGHT :: 30
 
 MAX_CARS_PER_ROAD :: 10
 
+ROAD_SPAWN_PROBABILITY_PERCENT :: 95
+
 DEV :: true
 
 ScreenState :: enum {
@@ -31,6 +33,13 @@ ScreenState :: enum {
 	Menu,
 	Game,
 	GameOver,
+}
+
+Direction :: enum {
+	Up,
+	Left,
+	Right,
+	Down,
 }
 
 currentScreenState := ScreenState.Boot
@@ -85,6 +94,7 @@ RoadEntity :: struct {
 	yPosition:     f32,
 	cars:          [dynamic]CarEntity,
 	carSpawnDelay: f32,
+	carDir:        Direction,
 }
 
 ROAD_WIDTH :: 260
@@ -343,10 +353,13 @@ renderGame :: proc(deltaTime: f32 = 0) {
 					rl.GRAY,
 				)
 
-				car.position.x += CAR_SPEED * deltaTime
+				car.position.x += ((road.carDir == .Right) ? CAR_SPEED : -CAR_SPEED) * deltaTime
 
 				if car.position.x > WINDOW_WIDTH {
 					car.position.x = -CAR_WIDTH
+				}
+				if car.position.x < -CAR_WIDTH {
+					car.position.x = WINDOW_WIDTH
 				}
 
 				if !isGameOver {
@@ -366,7 +379,10 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				yCarOffset := (rand.uint32() % 3) * ROAD_WIDTH / 3 // random 3 lane position
 				yCarPadding: f32 = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
 				car := CarEntity {
-					rl.Vector2{-CAR_WIDTH, road.yPosition + f32(yCarOffset) + yCarPadding},
+					rl.Vector2 {
+						(road.carDir == .Right) ? -CAR_WIDTH : WINDOW_WIDTH,
+						road.yPosition + f32(yCarOffset) + yCarPadding,
+					},
 					CAR_WIDTH,
 					CAR_HEIGHT,
 				}
@@ -401,9 +417,12 @@ getBottomMostTilePosition :: proc() -> f32 {
 }
 
 genRoad :: proc(yPos: f32) {
-	if !isRoadCollidingWithOtherRoadsAtPos(yPos) && rand.float64_range(0, 1) > 0.9 {
+	rand.reset(frameIndex + u64(time.now()._nsec) * 100)
+	if !isRoadCollidingWithOtherRoadsAtPos(yPos) &&
+	   rand.float64_range(0, 100) > ROAD_SPAWN_PROBABILITY_PERCENT {
 		cars := make([dynamic]CarEntity, 0, 0)
-		road := RoadEntity{yPos, cars, 0}
+		dir := rand.uint32() % 2
+		road := RoadEntity{yPos, cars, 0, (dir == 0) ? .Right : .Left}
 		append(&roads, road)
 	}
 }
