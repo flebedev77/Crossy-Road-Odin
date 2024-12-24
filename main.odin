@@ -5,6 +5,7 @@ import "core:math"
 import "core:math/rand"
 import "core:strconv"
 import "core:strings"
+import "core:time"
 import utils "utils"
 import rl "vendor:raylib"
 
@@ -15,6 +16,13 @@ PLAYER_SPEED: f32 : 300
 PLAYER_FRICTION: f32 : 0.9
 
 GAMEOVER_TEXT :: "GAME OVER!!!"
+
+CAR_SPEED :: 160
+CAR_SPAWN_RATE :: 1.5
+CAR_WIDTH :: 100
+CAR_HEIGHT :: 30
+
+MAX_CARS_PER_ROAD :: 10
 
 DEV :: true
 
@@ -67,8 +75,16 @@ tileHeight: f32 = math.ceil(f32(WINDOW_HEIGHT / (tileAmountHeight - 1)))
 tiles: [dynamic]TileEntity
 
 
+CarEntity :: struct {
+	position: rl.Vector2,
+	width:    f32,
+	height:   f32,
+}
+
 RoadEntity :: struct {
-	yPosition: f32,
+	yPosition:     f32,
+	cars:          [dynamic]CarEntity,
+	carSpawnDelay: f32,
 }
 
 ROAD_WIDTH :: 260
@@ -317,6 +333,37 @@ renderGame :: proc(deltaTime: f32 = 0) {
 	{ 	// roads
 		for &road in roads {
 			rl.DrawRectangle(0, i32(road.yPosition), WINDOW_WIDTH, ROAD_WIDTH, rl.BLACK)
+
+			for &car in road.cars {
+				rl.DrawRectangle(
+					i32(car.position.x),
+					i32(car.position.y),
+					i32(car.width),
+					i32(car.height),
+					rl.GRAY,
+				)
+
+				car.position.x += CAR_SPEED * deltaTime
+
+				if car.position.x > WINDOW_WIDTH {
+					car.position.x = -CAR_WIDTH
+				}
+			}
+
+			road.carSpawnDelay += deltaTime
+			if road.carSpawnDelay > CAR_SPAWN_RATE && len(road.cars) < MAX_CARS_PER_ROAD {
+				road.carSpawnDelay = 0
+				rand.reset(frameIndex + u64(len(road.cars)) + u64(time.now()._nsec))
+				yCarOffset := (rand.uint32() % 3) * ROAD_WIDTH / 3 // random 3 lane position
+				yCarPadding: f32 = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
+				car := CarEntity {
+					rl.Vector2{-CAR_WIDTH, road.yPosition + f32(yCarOffset) + yCarPadding},
+					CAR_WIDTH,
+					CAR_HEIGHT,
+				}
+				append(&road.cars, car)
+			}
+
 		}
 	}
 
@@ -346,7 +393,8 @@ getBottomMostTilePosition :: proc() -> f32 {
 
 genRoad :: proc(yPos: f32) {
 	if !isRoadCollidingWithOtherRoadsAtPos(yPos) && rand.float64_range(0, 1) > 0.9 {
-		road := RoadEntity{yPos}
+		cars := make([dynamic]CarEntity, 0, 0)
+		road := RoadEntity{yPos, cars, 0}
 		append(&roads, road)
 	}
 }
