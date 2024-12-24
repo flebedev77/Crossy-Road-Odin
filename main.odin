@@ -14,12 +14,15 @@ WINDOW_HEIGHT :: 480
 PLAYER_SPEED: f32 : 300
 PLAYER_FRICTION: f32 : 0.9
 
+GAMEOVER_TEXT :: "GAME OVER!!!"
+
 DEV :: true
 
 ScreenState :: enum {
 	Boot,
 	Menu,
 	Game,
+	GameOver,
 }
 
 currentScreenState := ScreenState.Boot
@@ -52,23 +55,28 @@ imageFilenames :: [?]string{"logo.png", "grasstile.png"}
 
 score: u32 = 0
 
+isGameOver: bool = false
+
 TileEntity :: struct {
 	position: rl.Vector2,
 }
-
-RoadEntity :: struct {
-	yPosition: f32,
-}
-
 tileAmountWidth :: 10
 tileAmountHeight :: 11
 tileWidth: f32 = math.ceil(f32(WINDOW_WIDTH / tileAmountWidth))
 tileHeight: f32 = math.ceil(f32(WINDOW_HEIGHT / (tileAmountHeight - 1)))
 tiles: [dynamic]TileEntity
 
+
+RoadEntity :: struct {
+	yPosition: f32,
+}
+
+ROAD_WIDTH :: 260
 roads: [dynamic]RoadEntity
 
 init :: proc() {
+	isGameOver = false
+
 	camera = rl.Camera2D{}
 	camera.zoom = 1
 
@@ -131,7 +139,11 @@ main :: proc() {
 			}
 
 			if rl.IsKeyPressed(.S) || rl.IsKeyPressed(.DOWN) {
-				score -= 1
+				if score == 0 {
+					gameOver()
+				} else {
+					score -= 1
+				}
 				movePlayer(0, 0.5)
 			}
 
@@ -186,12 +198,18 @@ main :: proc() {
 			}
 			break
 
+		case .GameOver:
+			renderGameOver()
+			break
+
 		}
 
 		rl.EndDrawing()
 
-		if DEV && rl.IsKeyDown(.END) {
-			rl.CloseWindow()
+		when DEV {
+			if rl.IsKeyDown(.END) {
+				rl.CloseWindow()
+			}
 		}
 	}
 
@@ -209,6 +227,16 @@ movePlayer :: proc(x: f32, y: f32) {
 	}
 }
 
+renderGameOver :: proc(deltaTime: f32 = 0) {
+	textWidth := rl.MeasureText(GAMEOVER_TEXT, 20)
+	rl.DrawText(
+		GAMEOVER_TEXT,
+		WINDOW_WIDTH / 2 - textWidth / 2,
+		WINDOW_HEIGHT / 2,
+		20,
+		rl.RAYWHITE,
+	)
+}
 
 menuTextBobOffset: f32 = 0
 renderMenu :: proc(deltaTime: f32 = 0) {
@@ -261,7 +289,6 @@ renderGame :: proc(deltaTime: f32 = 0) {
 	rl.BeginMode2D(camera)
 
 	{ 	// tiles
-		//rl.DrawTexture(images[1], 0, 0, rl.RAYWHITE)
 		topMostTilePosY: f32 = getTopMostTilePosition()
 		bottomMostTilePosY: f32 = getBottomMostTilePosition()
 		hasCalledRoadGen: bool = false
@@ -273,11 +300,10 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				tileEntity.position.y = topMostTilePosY - tileHeight
 				if !hasCalledRoadGen {
 					hasCalledRoadGen = true
-					genRoad(tileEntity.position.y)
+					genRoad(tileEntity.position.y - ROAD_WIDTH)
 				}
 			}
 
-			//rl.DrawTextureEx(images[1], tileEntity.position, 0, tileWidth, rl.RAYWHITE)
 			source := rl.Rectangle{0, 0, 32, 32}
 			dest := rl.Rectangle {
 				tileEntity.position.x,
@@ -290,16 +316,14 @@ renderGame :: proc(deltaTime: f32 = 0) {
 	}
 	{ 	// roads
 		for &road in roads {
-			rl.DrawRectangle(0, i32(road.yPosition), WINDOW_WIDTH, 20, rl.BLACK)
+			rl.DrawRectangle(0, i32(road.yPosition), WINDOW_WIDTH, ROAD_WIDTH, rl.BLACK)
 		}
 	}
 
 	rl.DrawCircleV(player.position, player.radius, rl.MAROON)
 
 	rl.EndMode2D()
-	buf: [32]byte
-	scoreStr := strconv.itoa(buf[:], int(score))
-	scoreStr = strings.concatenate({"Score: ", scoreStr})
+	scoreStr := fmt.aprintf("Score: %d", score)
 	scoreCStr := strings.clone_to_cstring(scoreStr)
 	rl.DrawText(scoreCStr, 10, 9, 19, rl.RAYWHITE)
 }
@@ -321,10 +345,23 @@ getBottomMostTilePosition :: proc() -> f32 {
 }
 
 genRoad :: proc(yPos: f32) {
-	if rand.float64_range(0, 1) > 0.9 {
+	if !isRoadCollidingWithOtherRoadsAtPos(yPos) && rand.float64_range(0, 1) > 0.9 {
 		road := RoadEntity{yPos}
 		append(&roads, road)
 	}
+}
 
+isRoadCollidingWithOtherRoadsAtPos :: proc(yPos: f32) -> bool {
+	for &road in roads {
+		if road.yPosition + ROAD_WIDTH > yPos && road.yPosition < yPos + ROAD_WIDTH {
+			return true
+		}
+	}
+	return false
+}
+
+gameOver :: proc() {
+	isGameOver = true
+	currentScreenState = .GameOver
 }
 
