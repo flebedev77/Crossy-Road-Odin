@@ -27,9 +27,17 @@ CAR_WIDTH :: 110
 CAR_HEIGHT :: 50
 
 MAX_CARS_PER_ROAD :: 5
+MAX_LOGS_PER_RIVER :: 10
 
-ROAD_SPAWN_PROBABILITY_PERCENT :: 50
+ROAD_SPAWN_PROBABILITY_PERCENT :: 20
 ROAD_WIDTH :: 260
+
+RIVER_SPAWN_PROBABILITY_PERCENT :: 30
+RIVER_WIDTH :: 240
+
+LOG_SPEED :: 140
+LOG_WIDTH :: 150
+LOG_HEIGHT :: 45
 
 DEV :: true
 
@@ -112,6 +120,19 @@ RoadEntity :: struct {
 
 roads: [dynamic]RoadEntity
 
+LogEntity :: struct {
+	position: rl.Vector2,
+	width:    f32,
+	height:   f32,
+}
+RiverEntity :: struct {
+	yPosition: f32,
+	logs:      [dynamic]LogEntity,
+	logDir:    Direction,
+}
+
+rivers: [dynamic]RiverEntity
+
 //config vs init: init runs when the game has to be reset, so every time the user starts a new game, however config only runs once - on launch
 
 config :: proc() {
@@ -154,6 +175,7 @@ init :: proc() {
 	}
 
 	roads = make([dynamic]RoadEntity, 0, 0)
+	rivers = make([dynamic]RiverEntity, 0, 0)
 }
 
 main :: proc() {
@@ -381,7 +403,9 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				tileEntity.position.y = topMostTilePosY - tileHeight
 				if !hasCalledRoadGen {
 					hasCalledRoadGen = true
-					genRoad(tileEntity.position.y - ROAD_WIDTH)
+					y := tileEntity.position.y - ROAD_WIDTH
+					genRoad(y)
+					genRiver(y)
 				}
 			}
 
@@ -470,6 +494,24 @@ renderGame :: proc(deltaTime: f32 = 0) {
 
 	}
 
+	{ 	// rivers
+		for &river in rivers {
+			rl.DrawRectangle(0, i32(river.yPosition), WINDOW_WIDTH, RIVER_WIDTH, rl.BLUE)
+
+			for &log in river.logs {
+				rl.DrawRectangle(
+					i32(log.position.x),
+					i32(log.position.y),
+					LOG_WIDTH,
+					LOG_HEIGHT,
+					rl.BROWN,
+				)
+
+				log.position.x += ((river.logDir == .Right) ? LOG_SPEED : -LOG_SPEED) * deltaTime
+			}
+		}
+	}
+
 	{ 	// render player
 		//rl.DrawCircleV(player.position, player.radius, rl.MAROON)
 		rl.DrawRectangle(
@@ -536,14 +578,58 @@ genRoad :: proc(yPos: f32) {
 	}
 }
 
+genRiver :: proc(yPos: f32) {
+	if isRoadCollidingWithOtherRoadsAtPos(yPos) {
+		return
+	}
+	rand.reset(u64(yPos) + u64(time.now()._nsec))
+	if rand.float32_range(0, 100) > 100 - RIVER_SPAWN_PROBABILITY_PERCENT {
+		logs := make([dynamic]LogEntity, 0, 0)
+		dir := rand.uint32() % 2
+		river := RiverEntity{yPos, logs, (dir == 0) ? .Right : .Left}
+
+		for i in 0 ..< MAX_LOGS_PER_RIVER {
+			yLogOffset := (rand.uint32() % 3) * RIVER_WIDTH / 3
+			yLogPadding: f32 = (RIVER_WIDTH / 3 - LOG_HEIGHT) / 2
+
+			yLogPos := river.yPosition + f32(yLogOffset) + yLogPadding
+			xLogPos: f32 = rand.float32_range(0, WINDOW_WIDTH)
+			guessIndex := 0
+			for (isLogCollidingWithOtherLogsAtPos(rl.Vector2{xLogPos, yLogPos}, &river.logs)) {
+				guessIndex += 1
+				if guessIndex > MAX_LOGS_PER_RIVER {
+					yLogOffset = (rand.uint32() % 3) * RIVER_WIDTH / 3
+					yLogPadding = (RIVER_WIDTH / 3 - CAR_HEIGHT) / 2
+					yLogPos = river.yPosition + f32(yLogOffset) + yLogPadding
+				}
+				rand.reset(frameIndex * 10 + u64(time.now()._nsec))
+				xLogPos = rand.float32_range(0, WINDOW_WIDTH)
+			}
+
+			log := LogEntity{rl.Vector2{xLogPos, yLogPos}, LOG_WIDTH, LOG_HEIGHT}
+
+			append(&river.logs, log)
+		}
+
+		delete(logs)
+		append(&rivers, river)
+	}
+}
+
 isRoadCollidingWithOtherRoadsAtPos :: proc(yPos: f32) -> bool {
 	for &road in roads {
 		if road.yPosition + ROAD_WIDTH > yPos && road.yPosition < yPos + ROAD_WIDTH {
 			return true
 		}
 	}
+	for &river in rivers {
+		if river.yPosition + RIVER_WIDTH > yPos && river.yPosition < yPos + RIVER_WIDTH {
+			return true
+		}
+	}
 	return false
 }
+
 
 isCarCollidingWithOtherCarsAtPos :: proc(pos: rl.Vector2, carsPtr: ^[dynamic]CarEntity) -> bool {
 	assert(carsPtr != nil, "Car Ptr is nil")
@@ -559,6 +645,20 @@ isCarCollidingWithOtherCarsAtPos :: proc(pos: rl.Vector2, carsPtr: ^[dynamic]Car
 	return false
 }
 
+isLogCollidingWithOtherLogsAtPos :: proc(pos: rl.Vector2, logsPtr: ^[dynamic]LogEntity) -> bool {
+	assert(logsPtr != nil, "Log Ptr is nil")
+	logs := logsPtr^
+	for &log in logs {
+		if pos.x < log.position.x + log.width &&
+		   pos.x + LOG_WIDTH > log.position.x &&
+		   pos.y < log.position.y + log.height &&
+		   pos.y + LOG_HEIGHT > log.position.y {
+			return true
+		}
+	}
+	return false
+}
+
 gameOver :: proc() {
 	isGameOver = true
 	currentScreenState = .GameOver
@@ -566,7 +666,14 @@ gameOver :: proc() {
 
 free :: proc() {
 	delete(tiles)
+	for &r in roads {
+		delete(r.cars)
+	}
 	delete(roads)
+	for &r in rivers {
+		delete(r.logs)
+	}
+	delete(rivers)
 	for &img in images {
 		rl.UnloadTexture(img)
 	}
