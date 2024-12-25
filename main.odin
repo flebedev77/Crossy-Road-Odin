@@ -26,9 +26,9 @@ CAR_SPAWN_RATE :: 1.5
 CAR_WIDTH :: 100
 CAR_HEIGHT :: 30
 
-MAX_CARS_PER_ROAD :: 10
+MAX_CARS_PER_ROAD :: 8
 
-ROAD_SPAWN_PROBABILITY_PERCENT :: 95
+ROAD_SPAWN_PROBABILITY_PERCENT :: 50
 
 DEV :: true
 
@@ -482,7 +482,7 @@ getBottomMostTilePosition :: proc() -> f32 {
 genRoad :: proc(yPos: f32) {
 	rand.reset(frameIndex + u64(time.now()._nsec) * 100)
 	if !isRoadCollidingWithOtherRoadsAtPos(yPos) &&
-	   rand.float64_range(0, 100) > ROAD_SPAWN_PROBABILITY_PERCENT {
+	   rand.float64_range(0, 100) > 100 - ROAD_SPAWN_PROBABILITY_PERCENT {
 		cars := make([dynamic]CarEntity, 0, 0)
 		dir := rand.uint32() % 2
 		road := RoadEntity{yPos, cars, 0, (dir == 0) ? .Right : .Left}
@@ -492,7 +492,7 @@ genRoad :: proc(yPos: f32) {
 
 			yCarPos := road.yPosition + f32(yCarOffset) + yCarPadding
 			xCarPos: f32 = rand.float32_range(0, WINDOW_WIDTH)
-			for (isCarCollidingWithOtherCarsAtPos(rl.Vector2{yCarPos, xCarPos}, &cars)) {
+			for (isCarCollidingWithOtherCarsAtPos(rl.Vector2{xCarPos, yCarPos}, &road.cars)) {
 				rand.reset(frameIndex * 10 + u64(time.now()._nsec))
 				xCarPos = rand.float32_range(0, WINDOW_WIDTH)
 			}
@@ -500,6 +500,7 @@ genRoad :: proc(yPos: f32) {
 			car := CarEntity{rl.Vector2{xCarPos, yCarPos}, CAR_WIDTH, CAR_HEIGHT}
 			append(&road.cars, car)
 		}
+		delete(cars)
 		append(&roads, road)
 	}
 }
@@ -513,8 +514,9 @@ isRoadCollidingWithOtherRoadsAtPos :: proc(yPos: f32) -> bool {
 	return false
 }
 
-isCarCollidingWithOtherCarsAtPos :: proc(pos: rl.Vector2, cars: ^[dynamic]CarEntity) -> bool {
-	cars := cars^
+isCarCollidingWithOtherCarsAtPos :: proc(pos: rl.Vector2, carsPtr: ^[dynamic]CarEntity) -> bool {
+	assert(carsPtr != nil, "Car Ptr is nil")
+	cars := carsPtr^
 	for &car in cars {
 		if pos.x < car.position.x + car.width &&
 		   pos.x + CAR_WIDTH > car.position.x &&
