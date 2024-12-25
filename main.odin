@@ -23,10 +23,10 @@ GAMEOVER_SCREEN_OFF_DELAY :: 3
 
 CAR_SPEED :: 160
 CAR_SPAWN_RATE :: 1.5
-CAR_WIDTH :: 100
-CAR_HEIGHT :: 30
+CAR_WIDTH :: 110
+CAR_HEIGHT :: 50
 
-MAX_CARS_PER_ROAD :: 8
+MAX_CARS_PER_ROAD :: 5
 
 ROAD_SPAWN_PROBABILITY_PERCENT :: 50
 
@@ -73,7 +73,12 @@ camera := rl.Camera2D{}
 frameIndex: u64 = 0
 
 imageFilenames :: [?]string{"logo.png", "grasstile.png"}
-imageContents :: [?][]u8{#load("assets/logo.png"), #load("assets/grasstile.png")}
+imageContents :: [?][]u8 {
+	#load("assets/logo.png"),
+	#load("assets/grasstile.png"),
+	#load("assets/car.png"),
+	#load("assets/car_flipped.png"),
+}
 
 score: u32 = 0
 bestScore: u32 = 0
@@ -394,12 +399,18 @@ renderGame :: proc(deltaTime: f32 = 0) {
 			rl.DrawRectangle(0, i32(road.yPosition), WINDOW_WIDTH, ROAD_WIDTH, rl.BLACK)
 
 			for &car in road.cars {
-				rl.DrawRectangle(
+				//rl.DrawRectangle(
+				//	i32(car.position.x),
+				//	i32(car.position.y),
+				//	i32(car.width),
+				//	i32(car.height),
+				//	rl.GRAY,
+				//)
+				rl.DrawTexture(
+					images[(road.carDir == .Right) ? 2 : 3],
 					i32(car.position.x),
 					i32(car.position.y),
-					i32(car.width),
-					i32(car.height),
-					rl.GRAY,
+					rl.RAYWHITE,
 				)
 			}
 		}
@@ -492,7 +503,14 @@ genRoad :: proc(yPos: f32) {
 
 			yCarPos := road.yPosition + f32(yCarOffset) + yCarPadding
 			xCarPos: f32 = rand.float32_range(0, WINDOW_WIDTH)
+			guessIndex := 0
 			for (isCarCollidingWithOtherCarsAtPos(rl.Vector2{xCarPos, yCarPos}, &road.cars)) {
+				guessIndex += 1
+				if guessIndex > MAX_CARS_PER_ROAD {
+					yCarOffset = (rand.uint32() % 3) * ROAD_WIDTH / 3
+					yCarPadding = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
+					yCarPos = road.yPosition + f32(yCarOffset) + yCarPadding
+				}
 				rand.reset(frameIndex * 10 + u64(time.now()._nsec))
 				xCarPos = rand.float32_range(0, WINDOW_WIDTH)
 			}
