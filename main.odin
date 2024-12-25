@@ -29,6 +29,7 @@ CAR_HEIGHT :: 50
 MAX_CARS_PER_ROAD :: 5
 
 ROAD_SPAWN_PROBABILITY_PERCENT :: 50
+ROAD_WIDTH :: 260
 
 DEV :: true
 
@@ -78,6 +79,7 @@ imageContents :: [?][]u8 {
 	#load("assets/grasstile.png"),
 	#load("assets/car.png"),
 	#load("assets/car_flipped.png"),
+	#load("assets/road.png"),
 }
 
 score: u32 = 0
@@ -108,7 +110,6 @@ RoadEntity :: struct {
 	carDir:        Direction,
 }
 
-ROAD_WIDTH :: 260
 roads: [dynamic]RoadEntity
 
 //config vs init: init runs when the game has to be reset, so every time the user starts a new game, however config only runs once - on launch
@@ -143,7 +144,6 @@ init :: proc() {
 		PLAYER_SPEED,
 		rl.BLACK,
 	}
-
 
 	tiles = make([dynamic]TileEntity, 0, 0)
 	for w in 0 ..< tileAmountWidth {
@@ -264,6 +264,7 @@ main :: proc() {
 
 	}
 
+	free()
 	rl.CloseWindow()
 }
 
@@ -396,7 +397,10 @@ renderGame :: proc(deltaTime: f32 = 0) {
 	}
 	{ 	// roads
 		for &road in roads {
-			rl.DrawRectangle(0, i32(road.yPosition), WINDOW_WIDTH, ROAD_WIDTH, rl.BLACK)
+			//rl.DrawRectangle(0, i32(road.yPosition), WINDOW_WIDTH, ROAD_WIDTH, rl.BLACK)
+
+			rl.DrawTexture(images[4], 0, i32(road.yPosition), rl.RAYWHITE)
+
 
 			for &car in road.cars {
 				//rl.DrawRectangle(
@@ -466,7 +470,16 @@ renderGame :: proc(deltaTime: f32 = 0) {
 
 	}
 
-	rl.DrawCircleV(player.position, player.radius, rl.MAROON)
+	{ 	// render player
+		//rl.DrawCircleV(player.position, player.radius, rl.MAROON)
+		rl.DrawRectangle(
+			i32(player.position.x - player.radius),
+			i32(player.position.y - player.radius),
+			i32(player.radius * 2),
+			i32(player.radius * 2),
+			rl.MAROON,
+		)
+	}
 
 	rl.EndMode2D()
 	scoreStr := fmt.aprintf("Score: %d", score)
@@ -549,5 +562,14 @@ isCarCollidingWithOtherCarsAtPos :: proc(pos: rl.Vector2, carsPtr: ^[dynamic]Car
 gameOver :: proc() {
 	isGameOver = true
 	currentScreenState = .GameOver
+}
+
+free :: proc() {
+	delete(tiles)
+	delete(roads)
+	for &img in images {
+		rl.UnloadTexture(img)
+	}
+	delete(images)
 }
 

@@ -30,6 +30,10 @@ loadTextureFromMem :: proc(data: rawptr, dataLen: i32) -> rl.Texture2D {
 	return tex
 }
 
+//loadFontFromMem :: proc(data: rawptr, dataLen: i32) -> rl.Font {
+//	font := rl.LoadFontFromMemory(".ttf", data, dataLen)
+//}
+
 ease_in_out :: proc(t: f32) -> f32 {
 	t := t
 	t = math.min(t, 1)
