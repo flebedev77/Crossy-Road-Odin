@@ -167,7 +167,7 @@ main :: proc() {
 		deltaTime: f32 = rl.GetFrameTime()
 		frameIndex += 1
 
-		{ 	//input
+		if !isGameOver { 	//input
 			keys.left = rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)
 			keys.right = rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT)
 			keys.up = rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)
@@ -401,7 +401,17 @@ renderGame :: proc(deltaTime: f32 = 0) {
 					i32(car.height),
 					rl.GRAY,
 				)
+			}
+		}
+		roadIndex := 0
+		for &road in roads {
+			if road.yPosition > camera.target.y + WINDOW_HEIGHT {
+				delete(road.cars)
+				unordered_remove(&roads, roadIndex)
+				continue
+			}
 
+			for &car in road.cars {
 				car.position.x += ((road.carDir == .Right) ? CAR_SPEED : -CAR_SPEED) * deltaTime
 
 				if car.position.x > WINDOW_WIDTH {
@@ -437,8 +447,12 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				}
 				append(&road.cars, car)
 			}
+			roadIndex += 1
+
 
 		}
+
+
 	}
 
 	rl.DrawCircleV(player.position, player.radius, rl.MAROON)
@@ -472,6 +486,20 @@ genRoad :: proc(yPos: f32) {
 		cars := make([dynamic]CarEntity, 0, 0)
 		dir := rand.uint32() % 2
 		road := RoadEntity{yPos, cars, 0, (dir == 0) ? .Right : .Left}
+		for i in 0 ..< MAX_CARS_PER_ROAD {
+			yCarOffset := (rand.uint32() % 3) * ROAD_WIDTH / 3
+			yCarPadding: f32 = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
+
+			yCarPos := road.yPosition + f32(yCarOffset) + yCarPadding
+			xCarPos: f32 = rand.float32_range(0, WINDOW_WIDTH)
+			for (isCarCollidingWithOtherCarsAtPos(rl.Vector2{yCarPos, xCarPos}, &cars)) {
+				rand.reset(frameIndex * 10 + u64(time.now()._nsec))
+				xCarPos = rand.float32_range(0, WINDOW_WIDTH)
+			}
+
+			car := CarEntity{rl.Vector2{xCarPos, yCarPos}, CAR_WIDTH, CAR_HEIGHT}
+			append(&road.cars, car)
+		}
 		append(&roads, road)
 	}
 }
@@ -479,6 +507,19 @@ genRoad :: proc(yPos: f32) {
 isRoadCollidingWithOtherRoadsAtPos :: proc(yPos: f32) -> bool {
 	for &road in roads {
 		if road.yPosition + ROAD_WIDTH > yPos && road.yPosition < yPos + ROAD_WIDTH {
+			return true
+		}
+	}
+	return false
+}
+
+isCarCollidingWithOtherCarsAtPos :: proc(pos: rl.Vector2, cars: ^[dynamic]CarEntity) -> bool {
+	cars := cars^
+	for &car in cars {
+		if pos.x < car.position.x + car.width &&
+		   pos.x + CAR_WIDTH > car.position.x &&
+		   pos.y < car.position.y + car.height &&
+		   pos.y + CAR_HEIGHT > car.position.y {
 			return true
 		}
 	}
