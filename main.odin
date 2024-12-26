@@ -470,22 +470,22 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				}
 			}
 
-			road.carSpawnDelay += deltaTime
-			if road.carSpawnDelay > CAR_SPAWN_RATE && len(road.cars) < MAX_CARS_PER_ROAD {
-				road.carSpawnDelay = 0
-				rand.reset(frameIndex + u64(len(road.cars)) + u64(time.now()._nsec))
-				yCarOffset := (rand.uint32() % 3) * ROAD_WIDTH / 3 // random 3 lane position
-				yCarPadding: f32 = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
-				car := CarEntity {
-					rl.Vector2 {
-						(road.carDir == .Right) ? -CAR_WIDTH : WINDOW_WIDTH,
-						road.yPosition + f32(yCarOffset) + yCarPadding,
-					},
-					CAR_WIDTH,
-					CAR_HEIGHT,
-				}
-				append(&road.cars, car)
-			}
+			//road.carSpawnDelay += deltaTime
+			//if road.carSpawnDelay > CAR_SPAWN_RATE && len(road.cars) < MAX_CARS_PER_ROAD {
+			//	road.carSpawnDelay = 0
+			//	rand.reset(frameIndex + u64(len(road.cars)) + u64(time.now()._nsec))
+			//	yCarOffset := (rand.uint32() % 3) * ROAD_WIDTH / 3 // random 3 lane position
+			//	yCarPadding: f32 = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
+			//	car := CarEntity {
+			//		rl.Vector2 {
+			//			(road.carDir == .Right) ? -CAR_WIDTH : WINDOW_WIDTH,
+			//			road.yPosition + f32(yCarOffset) + yCarPadding,
+			//		},
+			//		CAR_WIDTH,
+			//		CAR_HEIGHT,
+			//	}
+			//	append(&road.cars, car)
+			//}
 			roadIndex += 1
 
 
@@ -546,6 +546,9 @@ getBottomMostTilePosition :: proc() -> f32 {
 }
 
 genRoad :: proc(yPos: f32) {
+	when DEV {
+		fmt.println("Generating road")
+	}
 	rand.reset(frameIndex + u64(time.now()._nsec) * 100)
 	if !isRoadCollidingWithOtherRoadsAtPos(yPos) &&
 	   rand.float64_range(0, 100) > 100 - ROAD_SPAWN_PROBABILITY_PERCENT {
@@ -566,6 +569,9 @@ genRoad :: proc(yPos: f32) {
 					yCarPadding = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
 					yCarPos = road.yPosition + f32(yCarOffset) + yCarPadding
 				}
+				if guessIndex > 100 {
+					break
+				}
 				rand.reset(frameIndex * 10 + u64(time.now()._nsec))
 				xCarPos = rand.float32_range(0, WINDOW_WIDTH)
 			}
@@ -579,6 +585,9 @@ genRoad :: proc(yPos: f32) {
 }
 
 genRiver :: proc(yPos: f32) {
+	when DEV {
+		fmt.println("Generating river")
+	}
 	if isRoadCollidingWithOtherRoadsAtPos(yPos) {
 		return
 	}
@@ -587,6 +596,7 @@ genRiver :: proc(yPos: f32) {
 		logs := make([dynamic]LogEntity, 0, 0)
 		dir := rand.uint32() % 2
 		river := RiverEntity{yPos, logs, (dir == 0) ? .Right : .Left}
+		river.logs = logs
 
 		for i in 0 ..< MAX_LOGS_PER_RIVER {
 			yLogOffset := (rand.uint32() % 3) * RIVER_WIDTH / 3
@@ -601,6 +611,9 @@ genRiver :: proc(yPos: f32) {
 					yLogOffset = (rand.uint32() % 3) * RIVER_WIDTH / 3
 					yLogPadding = (RIVER_WIDTH / 3 - CAR_HEIGHT) / 2
 					yLogPos = river.yPosition + f32(yLogOffset) + yLogPadding
+				}
+				if guessIndex > 100 {
+					break
 				}
 				rand.reset(frameIndex * 10 + u64(time.now()._nsec))
 				xLogPos = rand.float32_range(0, WINDOW_WIDTH)
@@ -619,11 +632,17 @@ genRiver :: proc(yPos: f32) {
 isRoadCollidingWithOtherRoadsAtPos :: proc(yPos: f32) -> bool {
 	for &road in roads {
 		if road.yPosition + ROAD_WIDTH > yPos && road.yPosition < yPos + ROAD_WIDTH {
+			when DEV {
+				fmt.println("Colliding with road")
+			}
 			return true
 		}
 	}
 	for &river in rivers {
 		if river.yPosition + RIVER_WIDTH > yPos && river.yPosition < yPos + RIVER_WIDTH {
+			when DEV {
+				fmt.println("Colliding with river")
+			}
 			return true
 		}
 	}
@@ -660,8 +679,10 @@ isLogCollidingWithOtherLogsAtPos :: proc(pos: rl.Vector2, logsPtr: ^[dynamic]Log
 }
 
 gameOver :: proc() {
-	isGameOver = true
-	currentScreenState = .GameOver
+	when !DEV {
+		isGameOver = true
+		currentScreenState = .GameOver
+	}
 }
 
 free :: proc() {
