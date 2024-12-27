@@ -60,3 +60,42 @@ eased :: proc(from: f32, to: f32, t: f32) -> f32 {
 	return (to - from) * ease_out(t) + from
 }
 
+aabb :: proc(
+	aPos: rl.Vector2,
+	aWidth: f32,
+	aHeight: f32,
+	bPos: rl.Vector2,
+	bWidth: f32,
+	bHeight: f32,
+) -> bool {
+	return(
+		aPos.x < bPos.x + bWidth &&
+		aPos.x + aWidth > bPos.x &&
+		aPos.y < bPos.y + bHeight &&
+		aPos.y + aHeight > bPos.y \
+	)
+
+}
+
+
+entireBoxInBox :: proc(
+	aPos: rl.Vector2,
+	aWidth: f32,
+	aHeight: f32,
+	bPos: rl.Vector2,
+	bWidth: f32,
+	bHeight: f32,
+) -> bool {
+	topLeftCorner := rl.Vector2{aPos.x, aPos.y}
+	topRightCorner := rl.Vector2{aPos.x + aWidth, aPos.y}
+	bottomLeftCorner := rl.Vector2{aPos.x, aPos.y + aHeight}
+	bottomRightCorner := rl.Vector2{aPos.x + aWidth, aPos.y + aHeight}
+
+	return(
+		aabb(topLeftCorner, 1, 1, bPos, bWidth, bHeight) &&
+		aabb(topRightCorner, 1, 1, bPos, bWidth, bHeight) &&
+		aabb(bottomLeftCorner, 1, 1, bPos, bWidth, bHeight) &&
+		aabb(bottomRightCorner, 1, 1, bPos, bWidth, bHeight) \
+	)
+}
+

@@ -78,6 +78,9 @@ Keyboard :: struct {
 keys := Keyboard{}
 images: [dynamic]rl.Texture2D
 player := Player{}
+playerOnLog: bool = false
+playerOverWater: bool = false
+playerCanMove: bool = true
 camera := rl.Camera2D{}
 frameIndex: u64 = 0
 
@@ -165,6 +168,9 @@ init :: proc() {
 		PLAYER_SPEED,
 		rl.BLACK,
 	}
+	playerOnLog = false
+	playerOverWater = false
+	playerCanMove = true
 
 	tiles = make([dynamic]TileEntity, 0, 0)
 	for w in 0 ..< tileAmountWidth {
@@ -186,7 +192,6 @@ main :: proc() {
 	when DEV {
 		rl.SetExitKey(rl.KeyboardKey.END)
 	}
-
 	config()
 	init()
 
@@ -200,20 +205,27 @@ main :: proc() {
 			keys.up = rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)
 			keys.down = rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)
 
-			if rl.IsKeyPressed(.A) || rl.IsKeyPressed(.LEFT) {
+
+			if (playerOverWater && !playerOnLog) {
+				playerCanMove = false
+			} else {
+				playerCanMove = true
+			}
+
+			if (rl.IsKeyPressed(.A) || rl.IsKeyPressed(.LEFT)) && playerCanMove {
 				movePlayer(-1, 0)
 			}
 
-			if rl.IsKeyPressed(.D) || rl.IsKeyPressed(.RIGHT) {
+			if (rl.IsKeyPressed(.D) || rl.IsKeyPressed(.RIGHT)) && playerCanMove {
 				movePlayer(1, 0)
 			}
 
-			if rl.IsKeyPressed(.W) || rl.IsKeyPressed(.UP) {
+			if (rl.IsKeyPressed(.W) || rl.IsKeyPressed(.UP)) && playerCanMove {
 				score += 1
 				movePlayer(0, -1)
 			}
 
-			if rl.IsKeyPressed(.S) || rl.IsKeyPressed(.DOWN) {
+			if (rl.IsKeyPressed(.S) || rl.IsKeyPressed(.DOWN)) && playerCanMove {
 				if score == 0 {
 					gameOver()
 				} else {
@@ -427,13 +439,6 @@ renderGame :: proc(deltaTime: f32 = 0) {
 
 
 			for &car in road.cars {
-				//rl.DrawRectangle(
-				//	i32(car.position.x),
-				//	i32(car.position.y),
-				//	i32(car.width),
-				//	i32(car.height),
-				//	rl.GRAY,
-				//)
 				rl.DrawTexture(
 					images[(road.carDir == .Right) ? 2 : 3],
 					i32(car.position.x),
@@ -470,22 +475,6 @@ renderGame :: proc(deltaTime: f32 = 0) {
 				}
 			}
 
-			//road.carSpawnDelay += deltaTime
-			//if road.carSpawnDelay > CAR_SPAWN_RATE && len(road.cars) < MAX_CARS_PER_ROAD {
-			//	road.carSpawnDelay = 0
-			//	rand.reset(frameIndex + u64(len(road.cars)) + u64(time.now()._nsec))
-			//	yCarOffset := (rand.uint32() % 3) * ROAD_WIDTH / 3 // random 3 lane position
-			//	yCarPadding: f32 = (ROAD_WIDTH / 3 - CAR_HEIGHT) / 2
-			//	car := CarEntity {
-			//		rl.Vector2 {
-			//			(road.carDir == .Right) ? -CAR_WIDTH : WINDOW_WIDTH,
-			//			road.yPosition + f32(yCarOffset) + yCarPadding,
-			//		},
-			//		CAR_WIDTH,
-			//		CAR_HEIGHT,
-			//	}
-			//	append(&road.cars, car)
-			//}
 			roadIndex += 1
 
 
@@ -495,9 +484,22 @@ renderGame :: proc(deltaTime: f32 = 0) {
 	}
 
 	{ 	// rivers
+		playerOverWater = false
 		for &river in rivers {
 			rl.DrawRectangle(0, i32(river.yPosition), WINDOW_WIDTH, RIVER_WIDTH, rl.BLUE)
 
+			if utils.entireBoxInBox(
+				rl.Vector2{player.position.x - player.radius, player.position.y - player.radius},
+				player.radius * 2,
+				player.radius * 2,
+				rl.Vector2{0, river.yPosition},
+				WINDOW_WIDTH,
+				RIVER_WIDTH,
+			) {
+				playerOverWater = true
+			}
+
+			playerOnLog = false
 			for &log in river.logs {
 				rl.DrawRectangle(
 					i32(log.position.x),
@@ -507,8 +509,41 @@ renderGame :: proc(deltaTime: f32 = 0) {
 					rl.BROWN,
 				)
 
-				log.position.x += ((river.logDir == .Right) ? LOG_SPEED : -LOG_SPEED) * deltaTime
+				moveMult: f32 = ((river.logDir == .Right) ? LOG_SPEED : -LOG_SPEED)
+				log.position.x += moveMult * deltaTime
+
+				if log.position.x > WINDOW_WIDTH {
+					log.position.x = -LOG_WIDTH
+				}
+				if log.position.x < -LOG_WIDTH {
+					log.position.x = WINDOW_WIDTH
+				}
+
+				if utils.aabb(
+					log.position,
+					LOG_WIDTH,
+					LOG_HEIGHT,
+					rl.Vector2 {
+						player.position.x - player.radius,
+						player.position.y - player.radius,
+					},
+					player.radius * 2,
+					player.radius * 2,
+				) {
+					playerOnLog = true
+					if keys.up == false {
+						player.position.x += moveMult * deltaTime
+						player.position.y = log.position.y + LOG_HEIGHT / 2
+					}
+				}
+
+
 			}
+
+			if playerOverWater && !playerOnLog && rl.Vector2Length(player.velocity) < 1 {
+				gameOver()
+			}
+
 		}
 	}
 
@@ -546,9 +581,6 @@ getBottomMostTilePosition :: proc() -> f32 {
 }
 
 genRoad :: proc(yPos: f32) {
-	when DEV {
-		fmt.println("Generating road")
-	}
 	rand.reset(frameIndex + u64(time.now()._nsec) * 100)
 	if !isRoadCollidingWithOtherRoadsAtPos(yPos) &&
 	   rand.float64_range(0, 100) > 100 - ROAD_SPAWN_PROBABILITY_PERCENT {
@@ -585,9 +617,6 @@ genRoad :: proc(yPos: f32) {
 }
 
 genRiver :: proc(yPos: f32) {
-	when DEV {
-		fmt.println("Generating river")
-	}
 	if isRoadCollidingWithOtherRoadsAtPos(yPos) {
 		return
 	}
@@ -632,17 +661,11 @@ genRiver :: proc(yPos: f32) {
 isRoadCollidingWithOtherRoadsAtPos :: proc(yPos: f32) -> bool {
 	for &road in roads {
 		if road.yPosition + ROAD_WIDTH > yPos && road.yPosition < yPos + ROAD_WIDTH {
-			when DEV {
-				fmt.println("Colliding with road")
-			}
 			return true
 		}
 	}
 	for &river in rivers {
 		if river.yPosition + RIVER_WIDTH > yPos && river.yPosition < yPos + RIVER_WIDTH {
-			when DEV {
-				fmt.println("Colliding with river")
-			}
 			return true
 		}
 	}
@@ -679,10 +702,10 @@ isLogCollidingWithOtherLogsAtPos :: proc(pos: rl.Vector2, logsPtr: ^[dynamic]Log
 }
 
 gameOver :: proc() {
-	when !DEV {
-		isGameOver = true
-		currentScreenState = .GameOver
-	}
+	//when !DEV {
+	isGameOver = true
+	currentScreenState = .GameOver
+	//}
 }
 
 free :: proc() {
