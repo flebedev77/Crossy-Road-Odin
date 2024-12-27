@@ -21,19 +21,22 @@ GAMEOVER_SUBTEXT_FONT_SIZE :: 15
 GAMEOVER_TEXT_FLICKER_SPEED :: 0.6
 GAMEOVER_SCREEN_OFF_DELAY :: 3
 
+// car config
 CAR_SPEED :: 160
 CAR_SPAWN_RATE :: 1.5
 CAR_WIDTH :: 110
 CAR_HEIGHT :: 50
 
 MAX_CARS_PER_ROAD :: 5
-MAX_LOGS_PER_RIVER :: 10
 
-ROAD_SPAWN_PROBABILITY_PERCENT :: 20
+ROAD_SPAWN_PROBABILITY_PERCENT :: 200
 ROAD_WIDTH :: 260
 
-RIVER_SPAWN_PROBABILITY_PERCENT :: 30
+RIVER_SPAWN_PROBABILITY_PERCENT :: 0 //30
 RIVER_WIDTH :: 240
+
+// log config
+MAX_LOGS_PER_RIVER :: 5
 
 LOG_SPEED :: 140
 LOG_WIDTH :: 150
@@ -92,6 +95,9 @@ imageContents :: [?][]u8 {
 	#load("assets/car_flipped.png"),
 	#load("assets/road.png"),
 }
+
+audioContents :: [?][]u8{#load("assets/kaching.mp3")}
+sounds: [dynamic]utils.SoundEntity
 
 score: u32 = 0
 bestScore: u32 = 0
@@ -154,6 +160,11 @@ config :: proc() {
 		contentPtr := &fileContent[0]
 		append(&images, utils.loadTextureFromMem(contentPtr, i32(len(fileContent))))
 	}
+
+	for audio in audioContents {
+		audioPtr := &audio[0]
+		append(&sounds, utils.loadMusicFromMem(audioPtr, i32(len(audio))))
+	}
 }
 
 init :: proc() {
@@ -186,6 +197,7 @@ init :: proc() {
 
 main :: proc() {
 	rl.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Crossy road")
+	rl.InitAudioDevice()
 
 	rl.SetTargetFPS(60)
 
@@ -235,7 +247,10 @@ main :: proc() {
 			}
 			if score > bestScore {
 				bestScore = score
+				utils.playSound(&sounds[0])
 			}
+
+			utils.updateAudioSystem(&sounds, deltaTime)
 
 			player.position.x += player.velocity.x * deltaTime
 			player.position.y += player.velocity.y * deltaTime
@@ -709,6 +724,7 @@ gameOver :: proc() {
 }
 
 free :: proc() {
+	rl.CloseAudioDevice()
 	delete(tiles)
 	for &r in roads {
 		delete(r.cars)
@@ -722,5 +738,9 @@ free :: proc() {
 		rl.UnloadTexture(img)
 	}
 	delete(images)
+	for &sound in sounds {
+		rl.UnloadMusicStream(sound.data)
+	}
+	delete(sounds)
 }
 

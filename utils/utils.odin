@@ -30,6 +30,49 @@ loadTextureFromMem :: proc(data: rawptr, dataLen: i32) -> rl.Texture2D {
 	return tex
 }
 
+SoundEntity :: struct {
+	isPlaying: bool,
+	isLooping: bool,
+	hasEnded:  bool,
+	duration:  f32,
+	delay:     f32,
+	data:      rl.Music,
+}
+
+loadMusicFromMem :: proc(data: rawptr, dataLen: i32) -> SoundEntity {
+	return SoundEntity {
+		false,
+		false,
+		false,
+		1,
+		0,
+		rl.LoadMusicStreamFromMemory(".mp3", data, dataLen),
+	}
+}
+
+playSound :: proc(sound: ^SoundEntity) {
+	sound.hasEnded = false
+	sound.isPlaying = true
+	rl.StopMusicStream(sound.data)
+	rl.PlayMusicStream(sound.data)
+}
+
+updateAudioSystem :: proc(sounds: ^[dynamic]SoundEntity, deltaTime: f32) {
+	snds := sounds^
+	for &sound in snds {
+		if sound.isPlaying {
+			rl.UpdateMusicStream(sound.data)
+			sound.delay += deltaTime
+			if sound.delay > sound.duration {
+				sound.delay = 0
+				sound.isPlaying = false
+				sound.hasEnded = true
+				rl.StopMusicStream(sound.data)
+			}
+		}
+	}
+}
+
 //loadFontFromMem :: proc(data: rawptr, dataLen: i32) -> rl.Font {
 //	font := rl.LoadFontFromMemory(".ttf", data, dataLen)
 //}
@@ -98,4 +141,13 @@ entireBoxInBox :: proc(
 		aabb(bottomRightCorner, 1, 1, bPos, bWidth, bHeight) \
 	)
 }
+
+Popup :: struct {
+	position: rl.Vector2,
+	width:    f32,
+	height:   f32,
+	text:     string,
+}
+
+//drawPopups :: proc(content: string)
 
