@@ -40,14 +40,9 @@ SoundEntity :: struct {
 }
 
 loadMusicFromMem :: proc(data: rawptr, dataLen: i32) -> SoundEntity {
-	return SoundEntity {
-		false,
-		false,
-		false,
-		1,
-		0,
-		rl.LoadMusicStreamFromMemory(".mp3", data, dataLen),
-	}
+	m: rl.Music = rl.LoadMusicStreamFromMemory(".mp3", data, dataLen)
+	mlen: f32 = rl.GetMusicTimeLength(m)
+	return SoundEntity{false, false, false, mlen, 0, m}
 }
 
 playSound :: proc(sound: ^SoundEntity) {
@@ -142,12 +137,103 @@ entireBoxInBox :: proc(
 	)
 }
 
-Popup :: struct {
-	position: rl.Vector2,
-	width:    f32,
-	height:   f32,
-	text:     string,
+PopupState :: enum {
+	FromTo,
+	Idle,
+	ToFrom,
 }
 
-//drawPopups :: proc(content: string)
+Popup :: struct {
+	fromPos:   rl.Vector2,
+	toPos:     rl.Vector2,
+	position:  rl.Vector2,
+	width:     f32,
+	height:    f32,
+	text:      string,
+	textWidth: i32,
+	fontSize:  f32,
+	lifeTime:  f32,
+	time:      f32,
+	state:     PopupState,
+}
+
+addPopup :: proc(
+	popups: ^[dynamic]Popup,
+	text: string,
+	fromPos: rl.Vector2,
+	toPos: rl.Vector2,
+	w: f32,
+	h: f32,
+) {
+	assert(popups != nil, "Popups pointer cant be nil")
+	append(popups, Popup{fromPos, toPos, fromPos, w, h, text, 0, 0, 5, 0, .FromTo}) // if fontsize 0 then auto calculate
+}
+
+drawPopups :: proc(popups: ^[dynamic]Popup, deltaTime: f32) {
+	assert(popups != nil, "Popups pointer cant be nil")
+	ps := popups^
+	for i in 0 ..< len(ps) {
+		if ps[i].time > ps[i].lifeTime {
+			unordered_remove(popups, i)
+		}
+	}
+	for &p in ps {
+		p.time += deltaTime
+
+		totalMoveDuration := p.lifeTime / 3
+		lerpAmt := (deltaTime / totalMoveDuration)
+		idleStartTime := (p.lifeTime / 3) / 2
+		idleStopTime := (p.lifeTime / 3) * 2
+		if p.time >= 0 {
+			p.state = .FromTo
+		}
+		if p.time >= idleStartTime {
+			p.state = .Idle
+		}
+		if p.time >= idleStopTime {
+			p.state = .ToFrom
+		}
+		if p.state != .Idle {
+			toPosition: rl.Vector2 = (p.state == .FromTo) ? p.toPos : p.fromPos
+			//p.position.x = rl.Lerp(p.position.x, toPosition.x, lerpAmt)
+			//p.position.y = rl.Lerp(p.position.y, toPosition.y, lerpAmt)
+
+			p.position = toPosition
+
+		}
+
+		rl.DrawRectangle(
+			i32(p.position.x),
+			i32(p.position.y),
+			i32(p.width),
+			i32(p.height),
+			rl.GRAY,
+		)
+
+		t: cstring = strings.clone_to_cstring(p.text)
+		if p.fontSize == 0 {
+			saftey := 0
+			for saftey < 1000 {
+				saftey += 1
+
+				p.fontSize += 1
+				p.textWidth = rl.MeasureText(t, i32(p.fontSize))
+				if p.textWidth >= i32(p.width - 70) {
+					break
+				}
+
+			}
+
+		}
+
+		padding: f32 = (f32(p.width) - f32(p.textWidth)) / 2
+		rl.DrawText(
+			t,
+			i32(p.position.x + padding),
+			i32(p.position.y + 10),
+			i32(p.fontSize),
+			rl.RAYWHITE,
+		)
+	}
+}
 

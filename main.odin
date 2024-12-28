@@ -99,8 +99,12 @@ imageContents :: [?][]u8 {
 audioContents :: [?][]u8{#load("assets/kaching.mp3")}
 sounds: [dynamic]utils.SoundEntity
 
+popups: [dynamic]utils.Popup
+
 score: u32 = 0
 bestScore: u32 = 0
+hasBeatenBest: bool = false
+hasPlayedBeatSound: bool = false
 
 isGameOver: bool = false
 
@@ -161,6 +165,7 @@ config :: proc() {
 		append(&images, utils.loadTextureFromMem(contentPtr, i32(len(fileContent))))
 	}
 
+	sounds = make([dynamic]utils.SoundEntity, 0, 0)
 	for audio in audioContents {
 		audioPtr := &audio[0]
 		append(&sounds, utils.loadMusicFromMem(audioPtr, i32(len(audio))))
@@ -171,6 +176,8 @@ init :: proc() {
 	isGameOver = false
 
 	score = 0
+	hasBeatenBest = false
+	hasPlayedBeatSound = false
 
 	player = Player {
 		rl.Vector2{WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2},
@@ -193,6 +200,7 @@ init :: proc() {
 
 	roads = make([dynamic]RoadEntity, 0, 0)
 	rivers = make([dynamic]RiverEntity, 0, 0)
+	popups = make([dynamic]utils.Popup, 0, 0)
 }
 
 main :: proc() {
@@ -247,8 +255,22 @@ main :: proc() {
 			}
 			if score > bestScore {
 				bestScore = score
-				utils.playSound(&sounds[0])
+				if !hasPlayedBeatSound {
+					hasPlayedBeatSound = true
+					utils.playSound(&sounds[0])
+					popupWidth: f32 = 300
+					popupHeight: f32 = 50
+					utils.addPopup(
+						&popups,
+						"New High Score!",
+						rl.Vector2{WINDOW_WIDTH / 2 - popupWidth / 2, -popupHeight},
+						rl.Vector2{WINDOW_WIDTH / 2 - popupWidth / 2, 10},
+						popupWidth,
+						popupHeight,
+					)
+				}
 			}
+			hasBeatenBest = (score == bestScore)
 
 			utils.updateAudioSystem(&sounds, deltaTime)
 
@@ -284,9 +306,9 @@ main :: proc() {
 		switch currentScreenState {
 		case .Game:
 			renderGame(deltaTime)
+			utils.drawPopups(&popups, deltaTime)
 			break
 		case .Menu:
-			//Temporary: just skip the menu
 			renderMenu(deltaTime)
 			if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
 				currentScreenState = .Game
@@ -294,6 +316,7 @@ main :: proc() {
 			break
 
 		case .Boot:
+			//Temporary: just skip the menu
 			currentScreenState = .Game
 			renderBootScreen(deltaTime)
 			bootScreenDelay += deltaTime
@@ -742,5 +765,6 @@ free :: proc() {
 		rl.UnloadMusicStream(sound.data)
 	}
 	delete(sounds)
+	delete(popups)
 }
 
